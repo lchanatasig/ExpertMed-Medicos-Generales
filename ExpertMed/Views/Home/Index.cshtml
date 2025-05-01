@@ -1,0 +1,91 @@
+﻿@{
+    ViewBag.Title = "Home";
+    ViewBag.pTitle = "Home";
+    ViewBag.pageTitle = "Dashboards";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+@section styles {
+    <!--Swiper slider css-->
+    <link href="~/assets/libs/swiper/swiper-bundle.min.css" rel="stylesheet" type="text/css" />
+
+    <!-- jsvectormap css -->
+    <link href="~/assets/libs/jsvectormap/css/jsvectormap.min.css" rel="stylesheet" type="text/css" />
+}
+
+<div class="row dash-nft">
+    <div class="col-xxl-12">
+        <div class="row">
+            <div class="col-xl-12">
+                <div class="card overflow-hidden">
+                    <div class="card-body bg-marketplace d-flex">
+                        <div class="flex-grow-1">
+                            <h4 class="fs-18 lh-base mb-0">
+                                Otras opciones  <br> para <span class="text-success">ti.</span>
+                            </h4>
+                            <p class="mb-0 mt-2 pt-1 text-muted">¿Qué desea hacer hoy?</p>
+                            <div class="d-flex gap-3 mt-4">
+                                <a href="@Url.Action("AppointmentList","Appointment")" class="btn btn-primary">
+                                    <i class="ri-file-search-line"></i> VER TODAS LAS CITAS
+                                </a>
+                                <a href="@Url.Action("NewConsultation","Consultation")" class="btn btn-secondary">
+                                    <i class="ri-newspaper-line"></i> GENERAR UNA NUEVA CONSULTA MEDICA
+                                </a>
+                            </div>
+                        </div>
+
+                        <img src="~/assets/images/ExpermedBotGif.gif" alt="Imagen" style="height: 80px;"
+                             class="img-fluid" id="toast-trigger" role="button">
+                        <!-- Toast (oculto inicialmente) -->
+                        <div class="toast position-absolute top-0 end-0 m-4" role="alert" aria-live="assertive"
+                             aria-atomic="true" id="myToast">
+                            <div class="toast-header">
+                                <img src="~/assets/images/icon.png" class="rounded me-2" alt="..." height="20">
+                                <strong class="me-auto">ExpertBot</strong>
+                                <small>Ahora mismo</small>
+                                <button type="button" class="btn-close" data-bs-dismiss="toast"
+                                        aria-label="Close"></button>
+                            </div>
+                            <div class="toast-body">
+                                Pronto me tendrás como tu asistente inteligente!
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div><!--end col-->
+
+
+
+
+
+
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <!-- apexcharts -->
+    <script src="~/assets/libs/apexcharts/apexcharts.min.js"></script>
+
+    <!--Swiper slider js-->
+    <script src="~/assets/libs/swiper/swiper-bundle.min.js"></script>
+
+    <!-- Vector map-->
+    <script src="~/assets/libs/jsvectormap/js/jsvectormap.min.js"></script>
+    <script src="~/assets/libs/jsvectormap/maps/world-merc.js"></script>
+
+    <!-- Countdown js -->
+    <script src="~/assets/js/pages/coming-soon.init.js"></script>
+
+    <!-- Marketplace init -->
+    <script src="~/assets/js/pages/dashboard-nft.init.js"></script>
+
+
+    <script>
+        document.getElementById('toast-trigger').addEventListener('click', function () {
+            var toastEl = document.getElementById('myToast');
+            var toast = new bootstrap.Toast(toastEl);
+            toast.show();  // Mostrar el toast
+        });
+    </script>
+}

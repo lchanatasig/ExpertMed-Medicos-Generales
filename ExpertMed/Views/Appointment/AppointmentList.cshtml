@@ -1,0 +1,946 @@
+﻿@using Microsoft.AspNetCore.Http
+@{
+    ViewData["Title"] = "Listado De citas";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var successMessage = TempData["SuccessMessage"] as string;
+    var errorMessage = TempData["ErrorMessage"] as string;
+    var usuarioId = ViewContext.HttpContext.Session.GetInt32("UsuarioId");
+    var perfilId = ViewContext.HttpContext.Session.GetInt32("PerfilId");
+}
+
+@section styles {
+<link rel="stylesheet" href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap5.min.css" />
+<link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.2.9/css/responsive.bootstrap.min.css" />
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.2.2/css/buttons.dataTables.min.css">
+
+<!-- Agregar este estilo inline o como clase CSS para arreglar el z-index -->
+<style>
+    .offcanvas-end {
+    z-index: 1060 !important; /* Mayor que el modal Bootstrap (1055) */
+    }
+
+    .modal-backdrop.show {
+    z-index: 1050 !important;
+    }
+</style>
+
+}
+
+<div class="row">
+    <div class="col-lg-12">
+
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger">
+                @TempData["Error"]
+            </div>
+        }
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Lista de citas</h5>
+                <div class="btn-group mt-3" role="group" style="text-align:center">
+                    <button type="button" class="btn btn-soft-success @(ViewBag.CurrentStatus == 0 ? "active" : "")"
+                    onclick="filterAppointments(0)">
+                        Pagadas
+                    </button>
+                    <button type="button" class="btn btn-soft-warning @(ViewBag.CurrentStatus == 1 ? "active" : "")"
+                    onclick="filterAppointments(1)">
+                        Activas
+                    </button>
+                    <button type="button" class="btn btn-soft-danger @(ViewBag.CurrentStatus == 2 ? "active" : "")"
+                    onclick="filterAppointments(2)">
+                        Canceladas
+                    </button>
+                    <button type="button" class="btn btn-soft-info @(ViewBag.CurrentStatus == 3 ? "active" : "")"
+                    onclick="filterAppointments(3)">
+                        Seguimiento
+                    </button>
+                    <button type="button" class="btn btn-soft-dark @(ViewBag.CurrentStatus == 4 ? "active" : "")"
+                    onclick="filterAppointments(4)">
+                        Finalizadas
+                    </button>
+                </div>
+
+                <div class="card-body col-xxl-12">
+                    <table id="appointmentTable" class="table nowrap dt-responsive align-middle table-hover table-bordered">
+                        <thead>
+                            <tr>
+                                <th hidden>ID</th>
+                                <th hidden>ID PATIENT</th>
+                                @if (perfilId == 1 || perfilId == 3 || perfilId==4)
+                                {
+                                    <th>Nombre del médico</th>
+                                }
+                                <th>Fecha de la cita</th>
+                                <th>Nombre del paciente</th>
+                                <th>Estado de la cita</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var appointment in Model)
+                            {
+                                <tr>
+                                    <td hidden>@appointment.AppointmentId</td>
+                                    <td hidden>@appointment.AppointmentPatientid</td>
+                                    @if (perfilId == 1 || perfilId == 3 || perfilId==4)
+                                    {
+                                        <td>@(!string.IsNullOrEmpty(appointment.DoctorName) ? appointment.DoctorName : appointment.DoctorName2)</td>
+                                    }
+
+                                    <td>@appointment.AppointmentDate.ToString("dd/MM/yyyy") @appointment.AppointmentHour.ToString()</td>
+                                    <td>@appointment.PatientName</td> <!-- Nombre completo del paciente -->
+                                    <td>
+                                        @{
+                                            var (statusClass, statusText) = appointment.AppointmentStatus switch
+                                            {
+                                                0 => ("bg-success", "Pagadas"),
+                                                1 => ("bg-warning", "Activas"),
+                                                2 => ("bg-danger", "Canceladas"),
+                                                3 => ("bg-info", "Seguimiento"),
+                                                4 => ("bg-dark", "Finalizadas")
+                                            };
+                                        }
+                                        <span class="badge @statusClass">@statusText</span>
+                                    </td>
+                                    <td>
+                                        @if (appointment.AppointmentStatus == 4 || appointment.AppointmentStatus == 2)
+                                        {
+                                            <!-- Si la cita está  cancelada, deshabilitar el botón -->
+                                            <span class="btn btn-sm btn-soft-secondary" style="pointer-events: none;">
+                                                <i class="ri-edit-line"></i> Revisar
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <!-- Si la cita está activa o en seguimiento, mostrar el botón -->
+                                            <a href="#" class="btn btn-sm btn-soft-info"
+                                            data-bs-toggle="modal" data-bs-target="#optionModal"
+                                            onclick="openOptionModal(@appointment.AppointmentId,@appointment.AppointmentStatus,@appointment.AppointmentPatientid)">
+                                                <i class="ri-edit-line"></i> Revisar
+                                            </a>
+                                        }
+                                    </td>
+
+                                </tr>
+                            }
+                        </tbody>
+
+                    </table>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+</div>
+
+
+
+<!-- Modal opciones cita -->
+<div class="modal flip" id="optionModal" tabindex="-1" aria-labelledby="exampleModalgridLabel" aria-modal="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <!-- Input oculto para el estado -->
+            <input type="hidden" id="appointmentIdInput" name="appointmentIdInput" />
+            <input type="hidden" id="appointmentStatus" name="AppointmentStatus" />
+            <input type="hidden" id="appointmentPatientId" name="AppointmentPatientid" />
+            <input type="hidden" id="perfiltIdInput" name="perfilIdInput" value="@perfilId" />
+            <!-- Otros inputs ocultos... -->
+
+            <div class="modal-header">
+                <h5 class="modal-title">¿Qué desea hacer con esta cita?</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body">
+                <div class="row g-3">
+
+                    @if (perfilId == 1 || perfilId == 2 || perfilId == 4)
+                    {
+                        <!-- Botones con contenedores identificados -->
+                        <div class="col-4" id="rescheduleCol">
+                            <button type="button" class="btn btn-soft-info btn-label btn-sm w-100 waves-effect waves-light"
+                                    onclick="openRescheduleModal()">
+                                <i class="ri-user-smile-line label-icon align-middle fs-16 me-2"></i> Reprogramar Cita
+                            </button>
+                        </div>
+
+                        <div class="col-4" id="cancelCol">
+                            <button type="button" class="btn btn-soft-danger btn-label btn-sm w-100 waves-effect waves-light"
+                                    onclick="cancelAppointment()">
+                                <i class="ri-error-warning-fill label-icon align-middle fs-16 me-2"></i> Cancelar Cita
+                            </button>
+                        </div>
+
+                        <div class="col-4" id="payCol">
+                            <button type="button" class="btn btn-soft-success btn-label btn-sm w-100 waves-effect waves-light"
+                                    onclick="payAppointment()">
+                                <i class="ri-secure-payment-line label-icon align-middle fs-16 me-2"></i> Pagar cita
+                            </button>
+                        </div>
+
+                        <!-- Botón Consulta Normal -->
+                        <div class="col-4" id="startConsultCol">
+                            <button type="button" class="btn btn-soft-dark btn-label btn-sm w-100 waves-effect waves-light"
+                                    onclick="startConsultation()">
+                                <i class="las la-file-medical-alt label-icon align-middle fs-16 me-2"></i> Empezar Consulta
+                            </button>
+                        </div>
+
+                        <!-- Botón Consulta Seguimiento -->
+                        <div class="col-4" id="startFollowupCol">
+                            <button type="button" class="btn btn-soft-dark btn-label btn-sm w-100 waves-effect waves-light"
+                                    onclick="startFollowupConsultation()">
+                                <i class="las la-file-medical-alt label-icon align-middle fs-16 me-2"></i> Empezar Consulta Seguimiento
+                            </button>
+                        </div>
+
+                        <!-- Botón Enviar Recordatorio WhatsApp -->
+                        <div class="col-4" id="startFollowupCol">
+                            <button type="button" class="btn btn-soft-success btn-label btn-sm w-100 waves-effect waves-light"
+                                    onclick="sendReminderMessage()">
+                                <i class="ri-whatsapp-fill align-middle fs-16 me-2"></i> Enviar mensaje de recordatorio
+                            </button>
+                        </div>
+
+                        <div class="col-4">
+                            <button type="button"
+                                    class="btn btn-soft-primary btn-label btn-sm w-100 waves-effect waves-light"
+                                    data-bs-toggle="offcanvas"
+                                    data-bs-target="#vitalSignsCanvas"
+                                    onclick="prepareVitalSigns()">
+                                <i class="ri-heart-pulse-line label-icon align-middle fs-16 me-2"></i>
+                                Tomar Signos Vitales
+                            </button>
+                        </div>
+                    }
+                    @if (perfilId == 3)
+                    {
+                        <!-- Botones con contenedores identificados -->
+                        <div class="col-4" id="rescheduleCol">
+                            <button type="button" class="btn btn-soft-info btn-label btn-sm w-100 waves-effect waves-light"
+                                    onclick="openRescheduleModal()">
+                                <i class="ri-user-smile-line label-icon align-middle fs-16 me-2"></i> Reprogramar Cita
+                            </button>
+                        </div>
+
+                        <div class="col-4" id="cancelCol">
+                            <button type="button" class="btn btn-soft-danger btn-label btn-sm w-100 waves-effect waves-light"
+                                    onclick="cancelAppointment()">
+                                <i class="ri-error-warning-fill label-icon align-middle fs-16 me-2"></i> Cancelar Cita
+                            </button>
+                        </div>
+
+                        <div class="col-4" id="payCol">
+                            <button type="button" class="btn btn-soft-success btn-label btn-sm w-100 waves-effect waves-light"
+                                    onclick="payAppointment()">
+                                <i class="ri-secure-payment-line label-icon align-middle fs-16 me-2"></i> Pagar cita
+                            </button>
+                        </div>
+
+                       
+                        <!-- Botón Enviar Recordatorio WhatsApp -->
+                        <div class="col-4" id="startFollowupCol">
+                            <button type="button" class="btn btn-soft-success btn-label btn-sm w-100 waves-effect waves-light"
+                                    onclick="sendReminderMessage()">
+                                <i class="ri-whatsapp-fill align-middle fs-16 me-2"></i> Enviar mensaje de recordatorio
+                            </button>
+                        </div>
+
+                        <div class="col-4">
+                            <button type="button"
+                                    class="btn btn-soft-primary btn-label btn-sm w-100 waves-effect waves-light"
+                                    data-bs-toggle="offcanvas"
+                                    data-bs-target="#vitalSignsCanvas"
+                                    onclick="prepareVitalSigns()">
+                                <i class="ri-heart-pulse-line label-icon align-middle fs-16 me-2"></i>
+                                Tomar Signos Vitales
+                            </button>
+                        </div>
+                    }
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Modal agendar cita disponibles -->
+<div class="modal flip" id="appointmentModalgrid" tabindex="-1" aria-labelledby="appointmentModalgridLabel">
+    <div class="modal-dialog">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title" id="appointmentModalgridLabel"> Qué desea hacer con esta cita?</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body">
+                <form class="row g-3 needs-validation" novalidate name="formData">
+
+                    <div class="col-xxl-6" hidden>
+                        <label for="patientId" hidden class="form-label">Patient Id</label>
+                        <input type="hidden" class="form-control" id="patientId" required> <!-- Campo oculto para el ID del paciente -->
+                        <input type="hidden" class="form-control" id="appointment" required> <!-- Campo oculto para el ID de la cita -->
+                        <input type="hidden" class="form-control" id="doctorUserId"> <!-- Campo de texto para el ID del doctor -->
+                    </div>
+
+
+                    <!-- Input de usuarioId y fecha -->
+                    <div class="col-xxl-6">
+                        <label for="selectedDate" class="form-label">Seleccione una fecha</label> <!-- Etiqueta para seleccionar la fecha -->
+                        <input type="date" class="form-control" id="selectedDate" required> <!-- Campo de selección de fecha -->
+                    </div>
+
+                    <div class="col-xxl-6">
+                        <label for="appointmentTime" class="form-label">La hora de su cita es:</label> <!-- Etiqueta para la hora de la cita -->
+                        <input type="time" class="form-control" id="appointmentTime" required> <!-- Campo de selección de la hora de la cita -->
+                    </div>
+
+                    <div class="col-xxl-6">
+                        <button type="button" class="btn btn-soft-info" id="viewHoursButton">
+                            <i class="ri-eye-fill"></i> Ver horas disponibles <!-- Botón para ver las horas disponibles -->
+                        </button>
+                    </div>
+
+
+
+                </form>
+            </div>
+
+        </div>
+    </div>
+</div>
+<!-- Modal de las horas disponibles -->
+<div class="modal flip" id="hoursModalgrid" tabindex="-1" aria-labelledby="hoursModalgridLabel">
+    <div class="modal-dialog">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title" id="hoursModalgrid">Horas Disponibles</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex flex-wrap gap-2 justify-content-center" id="availableHoursContainer">
+                    <!-- Aquí se mostrarán las horas disponibles -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- OFFCANVAS Signos Vitales -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="vitalSignsCanvas" aria-labelledby="vitalSignsCanvasLabel">
+    <div class="offcanvas-header">
+        <h5 id="vitalSignsCanvasLabel">Registro de Signos Vitales</h5>
+        <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body">
+        <div class="alert alert-info">
+            <strong>Separador Decimal!</strong><br />
+            <i class="ri-calculator-line"></i> Debe usar el carácter <strong>·</strong> para separar decimales
+        </div>
+
+        <form id="vitalSignsForm">
+            <input type="hidden" id="vsAppointmentId" />
+            <input type="hidden" id="vsPatientId" />
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="temperature" class="form-label">Temperatura °C *</label>
+                    <input type="number" step="0.1" class="form-control" id="temperature" required>
+                </div>
+                <div class="col-md-6">
+                    <label for="respiratoryRate" class="form-label">Frecuencia respiratoria *</label>
+                    <input type="number" class="form-control" id="respiratoryRate" required>
+                </div>
+                <div class="col-md-6">
+                    <label for="bloodPressure" class="form-label">Presión Arterial *</label>
+                    <input type="text" class="form-control" id="bloodPressure" placeholder="Ej: 046/123" required>
+                    <small class="form-text text-muted">
+                        Si la presión es de dos cifras, anteponga 0. Ej: 046/123
+                    </small>
+                </div>
+                <div class="col-md-6">
+                    <label for="heartRate" class="form-label">Pulso por minuto *</label>
+                    <input type="number" class="form-control" id="heartRate" required>
+                </div>
+                <div class="col-md-6">
+                    <label for="weight" class="form-label">Peso * (kg)</label>
+                    <input type="number" step="0.1" class="form-control" id="weight" required>
+                </div>
+                <div class="col-md-6">
+                    <label for="height" class="form-label">Altura * (cm)</label>
+                    <input type="number" class="form-control" id="height" required>
+                </div>
+            </div>
+
+            <hr />
+            <button type="button" class="btn btn-primary w-100 mt-3" onclick="submitVitalSigns()">Guardar Signos</button>
+        </form>
+
+    </div>
+</div>
+@section scripts {
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"
+            integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
+
+    <!--datatable js-->
+    <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.2.9/js/dataTables.responsive.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.2.2/js/dataTables.buttons.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.2.2/js/buttons.print.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.2.2/js/buttons.html5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/vfs_fonts.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/pdfmake.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.3/jszip.min.js"></script>
+
+    <script src="~/assets/js/pages/datatables.init.js"></script>
+
+    <script>
+        $(document).ready(function () {
+            $('#appointmentTable').DataTable({
+                responsive: true,
+                pageLength: 10,
+                order: [[1, 'desc']]
+            });
+        });
+
+        function filterAppointments(status) {
+            window.location.href = '@Url.Action("AppointmentList", "Appointment")?' + new URLSearchParams({
+                appointmentStatus: status,
+                userProfile: '@ViewBag.UserProfile',
+                userId: '@ViewBag.UserId',
+
+            }).toString();
+        }
+    </script>
+
+    <script>
+                function openOptionModal(appointmentId, appointmentStatus, appointmentpatientId) {
+                    // Asignar los valores a los campos ocultos
+                    document.getElementById('appointmentIdInput').value = appointmentId;
+                    document.getElementById('appointmentStatus').value = appointmentStatus;
+                    document.getElementById('appointmentPatientId').value = appointmentpatientId;
+
+                    // Obtener referencias a los botones
+                    const consultaNormal = document.getElementById('startConsultCol');
+                    const consultaSeguimiento = document.getElementById('startFollowupCol');
+
+                    // Ocultar ambos botones inicialmente
+                    consultaNormal.style.display = 'none';
+                    consultaSeguimiento.style.display = 'none';
+
+                    // Mostrar el botón correspondiente según el estado
+                    if (parseInt(appointmentStatus) === 1) {
+                        consultaNormal.style.display = 'block';
+                    } else if (parseInt(appointmentStatus) === 3) {
+                        consultaSeguimiento.style.display = 'block';
+                    }
+
+                    // Mostrar el modal
+                    const optionModal = new bootstrap.Modal(document.getElementById('optionModal'));
+                    optionModal.show();
+                }
+
+
+                function openRescheduleModal() {
+                    // Obtener el ID de la cita desde el campo oculto
+                    const appointmentId = document.getElementById("appointmentIdInput").value;
+
+                    // Obtener el perfil desde el campo oculto
+                    const perfilId = document.getElementById("perfiltIdInput").value;
+
+                    if (!appointmentId) {
+                        alert("No appointment ID found.");
+                        return;
+                    }
+                    const url = '@Url.Action("AppointmentGetById", "Appointment")' + `?id=${appointmentId}&userProfile=${perfilId}`;
+
+                    // Realizar una solicitud HTTP al backend
+        fetch(url)
+        .then(response => {
+                            if (!response.ok) {
+                                throw new Error("No logró obtener detalles de la cita.");
+                            }
+                            return response.json();
+                        })
+                        .then(data => {
+                            // Verifica si los datos existen
+                            if (!data) {
+                                alert("Appointment not found.");
+                                return;
+                            }
+
+                            // Llenar los campos del modal con los datos de la cita
+                            document.getElementById("appointment").value = appointmentId || "";
+                            document.getElementById("patientId").value = data.patient || "";
+                            document.getElementById("selectedDate").value = data.date || "";
+                            document.getElementById("appointmentTime").value = data.time || "";
+
+                            // Si el perfil es Asistente (3), llenar el campo de DoctorUserId
+                            if (data.doctorUserId) {
+                                document.getElementById("doctorUserId").value = data.doctorUserId || "";
+                            }
+
+                            // Mostrar el modal de reagendar
+                            const rescheduleModal = new bootstrap.Modal(document.getElementById("appointmentModalgrid"));
+                            rescheduleModal.show();
+                        })
+                        .catch(error => {
+                            console.error("Error:", error);
+                            alert("Ocurrió un error al obtener los detalles de la cita.");
+                        });
+                }
+
+
+
+                $(document).ready(function () {
+                    // Al hacer clic en el botón para ver las horas disponibles
+                    $('#viewHoursButton').click(function () {
+                        var userId = @usuarioId;  // Este valor debe ser dinámico, por ejemplo, extraído de la sesión o del usuario autenticado
+                        var selectedDate = $('#selectedDate').val();
+                        var doctorUserId = $('#doctorUserId').val(); // Obtener el ID del médico seleccionado
+
+                        console.log('User ID:', userId);
+                        console.log('Selected Date:', selectedDate);
+                        console.log('Doctor User ID:', doctorUserId); // Imprimir el ID del médico
+
+                        if (!selectedDate) {
+                            alert('Please select a date.');
+                            return;
+                        }
+
+                        // Realizar la solicitud AJAX al backend
+                        $.ajax({
+                            url: '@Url.Action("GetAvailableHours", "Appointment")',
+                            type: 'GET',
+                            data: {
+                                userId: userId,
+                                date: selectedDate,
+                                doctorUserId: doctorUserId // Pasar el ID del médico si es necesario
+                            },
+                            success: function (response) {
+                                $('#availableHoursContainer').empty();  // Limpiar el contenedor de horas disponibles
+
+                                if (response.length > 0) {
+                                    // Mostrar las horas en el contenedor
+                                    response.forEach(function (hour) {
+                                        $('#availableHoursContainer').append(
+                                            '<button type="button" class="btn btn-outline-primary btn-sm" data-hour="' + hour + '">' + hour + '</button>'
+                                        );
+                                    });
+                                } else {
+                                    // Si no hay horas disponibles
+                                    $('#availableHoursContainer').append(
+                                        '<p>No hay hotas disponibles.</p>'
+                                    );
+                                }
+
+                                $('#hoursModalgrid').modal('show');  // Mostrar el modal con las horas disponibles
+                            },
+                            error: function (xhr, status, error) {
+                                alert('No hay horas disponibles: ' + error);
+                            }
+                        });
+                    });
+
+
+                    // Al hacer clic en una de las horas disponibles
+                    $('#availableHoursContainer').on('click', 'button', function () {
+                        // Obtener la hora seleccionada desde el atributo 'data-hour' del botón
+                        var selectedHour = $(this).data('hour');
+
+                        // Establecer la hora seleccionada en el campo de entrada
+                        $('#appointmentTime').val(selectedHour);
+
+                        console.log('Selected Hour:', selectedHour);
+                        console.log('Selected Date:', $('#selectedDate').val());
+                        console.log('Patient ID:', $('#patientId').val());
+                        console.log('Medico ID:', $('#doctorUserId').val());
+                        console.log('Appointment ID:', $('#appointment').val());
+
+
+                        // Mostrar SweetAlert para confirmación
+                        var selectedDate = $('#selectedDate').val(); // Obtener la fecha seleccionada
+                        var patientId = $('#patientId').val();  // Obtener el ID del paciente
+                        var doctorUserId = $('#doctorUserId').val(); // Obtener el ID del médico seleccionado
+                        var appointmentId = $('#appointment').val();  // Obtener el ID del paciente
+                        Swal.fire({
+                            title: 'Confirme su cita',
+                            text: 'Usted selecciono la hora ' + selectedHour + ' la fecha ' + selectedDate + '. Esta seguro de agendar esta cita?',
+                            icon: 'question',
+                            showCancelButton: true,
+                            confirmButtonText: '¡Sí, confirmar!',
+                            cancelButtonText: 'No, elegir de nuevo',
+                            reverseButtons: true
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                // Si el usuario confirma, enviamos la cita al backend
+
+                                $.ajax({
+                                    url: '@Url.Action("ModifyAppointment", "Appointment")?doctorUserId=' + parseInt(doctorUserId),  // Convertir doctorUserId a número
+                                    type: 'POST',
+                                    contentType: 'application/json', // Asegúrate de especificar el tipo de contenido
+                                    data: JSON.stringify({
+                                        // Asegúrate de que patientId es un número entero
+                                        AppointmentId: appointmentId,  // ID del paciente
+
+                                        AppointmentDate: selectedDate,  // Asegúrate de que sea en formato adecuado, por ejemplo: "2025-01-31"
+                                        AppointmentHour: selectedHour,
+                                        AppointmentPatientid: patientId, // Asegúrate de que selectedHour esté en formato adecuado, por ejemplo: "16:00"
+                                    }),
+                                           success: function (response) {
+            if (response.success) {
+                Swal.fire({
+                    title: 'Cita Actualizada!',
+                    text: response.message,
+                    icon: 'success',
+                    showCancelButton: response.whatsappUrl ? true : false,
+                    confirmButtonText: response.whatsappUrl ? 'Enviar recordatorio' : 'OK',
+                    cancelButtonText: 'Omitir'
+                }).then((result) => {
+                    if (result.isConfirmed && response.whatsappUrl) {
+                        // Abrir la URL de WhatsApp en una nueva pestaña para enviar el recordatorio
+                        window.open(response.whatsappUrl, '_blank');
+                    }
+                    // Redirigir a la lista de citas
+                    window.location.href = '@Url.Action("AppointmentList", "Appointment")';
+                });
+            } else {
+                Swal.fire('Error', response.message || 'Tenemos el siguiente error en la cita.', 'error');
+            }
+        },
+        error: function (xhr, status, error) {
+            Swal.fire('Error', 'La solicitud falló.', 'error');
+        }
+
+                                });
+
+
+                                // Imprimir datos de la solicitud para depuración
+                                console.log('Sending data to backend:', JSON.stringify({
+                                    AppointmentId: appointmentId,  // ID del paciente
+
+                                    AppointmentPatientid: patientId,
+                                    AppointmentDate: selectedDate,
+                                    AppointmentHour: selectedHour,
+                                    DoctorUserId: doctorUserId  // Agregar el ID del médico aquí
+                                }));
+
+                            } else if (result.dismiss === Swal.DismissReason.cancel) {
+                                // Si el usuario cancela, cerramos el modal
+                                $('#hoursModalgrid').modal('hide');
+                            }
+                        });
+                    });
+                });
+
+
+
+
+
+
+                // Método para desactivar una cita
+                function cancelAppointment() {
+                    const appointmentId = document.getElementById("appointmentIdInput").value;
+                    const userId = @usuarioId; // Suponiendo que también tienes un campo de usuario
+
+                    if (!appointmentId || !userId) {
+                        alert("No se encuentra ID de cita ni ID de usuario.");
+                        return;
+                    }
+
+                    // Usar SweetAlert para confirmar la cancelación
+                    Swal.fire({
+                        title: '¿Esta seguro?',
+                        text: "Estás a punto de cancelar esta cita!",
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: '¡sí,Cancelar!',
+                        cancelButtonText: 'No, keep it',
+                        reverseButtons: true
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            const appointmentData = {
+                                AppointmentId: appointmentId,
+                                AppointmentModifyuser: userId
+                            };
+
+                            fetch('@Url.Action("DesactivateAppointment", "Appointment")', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify(appointmentData)
+                            })
+                                .then(response => {
+                                    if (!response.ok) {
+                                        return response.json().then(data => {
+                                            throw new Error(data.message || "No se pudo desactivar la cita.");
+                                        });
+                                    }
+                                    return response.json();
+                                })
+                                .then(data => {
+                                    // Si la cita fue desactivada con éxito
+                                    Swal.fire(
+                                        'Canceled!',
+                                        data.message || 'Su cita ha sido cancelada.',
+                                        'success'
+                                    );
+
+                                    // Cerrar el modal después de 3 segundos
+                                    setTimeout(() => {
+                                        Swal.close();  // Cierra el modal de SweetAlert
+                                        window.location.href = '@Url.Action("AppointmentList", "Appointment")';
+                                    }, 3000); // Cerrar después de 3 segundos
+                                })
+                                .catch(error => {
+                                    console.error("Error:", error);
+                                    Swal.fire(
+                                        'Error!',
+                                        error.message || 'Se produjo un error al cancelar la cita.',
+                                        'error'
+                                    );
+
+                                    // Cerrar el modal después de 3 segundos
+                                    setTimeout(() => {
+                                        Swal.close();  // Cierra el modal de SweetAlert
+                                    }, 3000); // Cerrar después de 3 segundos
+                                });
+                        } else {
+                            Swal.fire(
+                                'Cancelada',
+                                '¡Su cita esta segura!',
+                                'info'
+                            );
+
+                            // Cerrar el modal después de 3 segundos
+                            setTimeout(() => {
+                                Swal.close();  // Cierra el modal de SweetAlert
+                            }, 3000); // Cerrar después de 3 segundos
+                        }
+                    });
+                }
+
+
+                document.getElementById('optionModal').addEventListener('hidden.bs.modal', function () {
+                    // Eliminar cualquier backdrop residual
+                    document.querySelectorAll('.modal-backdrop').forEach(function (backdrop) {
+                        backdrop.remove();
+                    });
+                    // Habilitar el desplazamiento de la página
+                    document.body.classList.remove('modal-open');
+                    document.body.style.paddingRight = '';
+                });
+
+
+                function startConsultation() {
+                    // Obtener el ID de la cita desde el campo oculto
+                    const appointmentId = document.getElementById("appointmentIdInput").value;
+                    console.log("Appointment ID:", appointmentId);
+
+                    if (!appointmentId) {
+                        alert("No se encontró una identificación de cita.");
+                        return;
+                    }
+
+                    // Obtener los datos del paciente asociados a la cita, específicamente el PatientId
+                    const urlGetPatient = '@Url.Action("AppointmentGetById", "Appointment")';
+                    const apiUrl = `${urlGetPatient}?id=${appointmentId}`;
+                    console.log("API URL to fetch patient data:", apiUrl);
+
+                    fetch(apiUrl)
+                        .then(response => {
+                            console.log("Response status:", response.status);
+                            if (!response.ok) {
+                                throw new Error("No logró obtener detalles del paciente.");
+                            }
+                            return response.json();
+                        })
+                        .then(data => {
+                            console.log("Appointment data received:", data);
+
+                            if (!data.patient) {
+                                alert("Paciente no encontrado para esta cita.");
+                                return;
+                            }
+
+                            // Redirigir a la URL de NewConsultation con el PatientId
+                            const urlNewConsultation = '@Url.Action("NewConsultation", "Consultation")';
+                            const consultationUrl = `${urlNewConsultation}?patientId=${data.patient}`;
+                            console.log("Redirecting to:", consultationUrl);
+
+                            // Redirigir al controlador
+                            window.location.href = consultationUrl;
+                        })
+                        .catch(error => {
+                            console.error("Error durante el inicio de la consulta:", error);
+                            alert("Se produjo un error al comenzar la consulta.");
+                        });
+                }
+
+                function startFollowupConsultation() {
+                    // Obtener el valor del patientId desde el input oculto del modal
+                    let patientId = document.getElementById("appointmentPatientId").value;
+
+                    if (!patientId) {
+                        alert("Error: Paciente no válido.");
+                        return;
+                    }
+
+                    // Redirigir a la consulta de seguimiento con el ID del paciente
+                    window.location.href = '@Url.Action("ConsultationFollowUp", "Consultation")' + '?patientid=' + encodeURIComponent(patientId);
+
+                }
+                function payAppointment() {
+                    // Obtener el ID de la cita desde el campo oculto
+                    const appointmentId = document.getElementById("appointmentIdInput").value;
+                    const patientId = document.getElementById("appointmentPatientId").value;
+                        console.log("Appointment ID:", appointmentId);
+                    console.log("Appointment Patient ID:", patientId);
+
+                    // Validar que ambos ID estén presentes
+                    if (!appointmentId) {
+                        alert("No appointment ID found.");
+                        return;
+                    }
+                    if (!appointmentPatientId) {
+                        alert("No patient ID found.");
+                        return;
+                    }
+                    // Redirigir a la página de facturación pasando ambos parámetros en la URL
+                    window.location.href = '@Url.Action("Facturacion", "Billing")' +
+                        '?appointmentId=' + encodeURIComponent(appointmentId) +
+                        '&patientId=' + encodeURIComponent(patientId);
+
+                }
+                      function sendReminderMessage() {
+            // Obtener el ID de la cita del campo oculto en el modal
+            var appointmentId = document.getElementById("appointmentIdInput").value;
+
+            if (!appointmentId) {
+                alert("No se encontró el ID de la cita.");
+                return;
+            }
+
+            // Redirigir a la acción del controlador, pasando appointmentId y userProfile
+            window.location.href = '@Url.Action("SendWhatsAppReminder", "Appointment")?appointmentId='
+                                     + appointmentId + '&userProfile=@ViewBag.UserProfile';
+        }
+
+
+
+
+
+
+    </script>
+    <script>
+        document.getElementById("bloodPressure").addEventListener("input", function (e) {
+            let value = e.target.value.replace(/[^\d]/g, "");
+            if (value.length > 6) value = value.slice(0, 6);
+            if (value.length > 3) {
+                value = value.slice(0, 3) + "/" + value.slice(3);
+            }
+            e.target.value = value;
+        });
+
+        function prepareVitalSigns() {
+            const appointmentId = document.getElementById("appointmentIdInput").value;
+            const patientId = document.getElementById("appointmentPatientId").value;
+
+            document.getElementById("vsAppointmentId").value = appointmentId;
+            document.getElementById("vsPatientId").value = patientId;
+        }
+
+        function submitVitalSigns() {
+            const rawBP = document.getElementById("bloodPressure").value.trim();
+            const bpParts = rawBP.split('/');
+
+            if (
+                bpParts.length !== 2 ||
+                bpParts[0].length !== 3 ||       // Asistólica exacta 3 dígitos
+                bpParts[1].length < 2 || bpParts[1].length > 3 // Diastólica entre 2 y 3 dígitos
+            ) {
+                Swal.fire("Error", "La presión arterial debe tener el formato 3 dígitos/2-3 dígitos. Ej: 046/89", "warning");
+                return;
+            }
+
+            const data = {
+                appointmentId: parseInt(document.getElementById("vsAppointmentId").value),
+                patientId: parseInt(document.getElementById("vsPatientId").value),
+                temperature: parseFloat(document.getElementById("temperature").value),
+                respiratoryRate: parseInt(document.getElementById("respiratoryRate").value),
+                bloodPressureAS: bpParts[0],
+                bloodPressureDIS: bpParts[1],
+                pulse: document.getElementById("heartRate").value,
+                weight: document.getElementById("weight").value,
+                size: document.getElementById("height").value,
+                createdBy: @usuarioId
+            };
+
+            fetch('@Url.Action("InsertVitalSigns", "Appointment")', {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(data)
+            })
+                .then(resp => resp.json())
+                .then(result => {
+                    if (result.success) {
+                        Swal.fire("¡Guardado!", result.message, "success");
+                        document.getElementById("vitalSignsForm").reset();
+
+                        // ✅ Cerrar el offcanvas
+                        const canvas = bootstrap.Offcanvas.getInstance(document.getElementById("vitalSignsCanvas"));
+                        if (canvas) canvas.hide();
+                    } else {
+                        Swal.fire("Error", result.message || "Ocurrió un problema al guardar.", "error");
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    Swal.fire("Error", "No se pudo guardar los signos vitales.", "error");
+                });
+        }
+    </script>
+
+
+
+
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <script>
+            Swal.fire({
+                title: '¡Éxito!',
+                text: '@successMessage',
+                icon: 'success',
+                confirmButtonText: 'OK',
+                timer: 3000
+            });
+        </script>
+    }
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <script>
+            Swal.fire({
+                title: 'Error',
+                text: '@errorMessage',
+                icon: 'error',
+                confirmButtonText: 'OK',
+                timer: 3000
+            });
+        </script>
+    }
+
+}
