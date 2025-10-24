@@ -823,8 +823,7 @@
                         '&patientId=' + encodeURIComponent(patientId);
 
                 }
-                      function sendReminderMessage() {
-            // Obtener el ID de la cita del campo oculto en el modal
+                            function sendReminderMessage() {
             var appointmentId = document.getElementById("appointmentIdInput").value;
 
             if (!appointmentId) {
@@ -832,10 +831,13 @@
                 return;
             }
 
-            // Redirigir a la acción del controlador, pasando appointmentId y userProfile
-            window.location.href = '@Url.Action("SendWhatsAppReminder", "Appointment")?appointmentId='
-                                     + appointmentId + '&userProfile=@ViewBag.UserProfile';
+            var url = '@Url.Action("SendWhatsAppReminder", "Appointment")?appointmentId='
+                      + appointmentId + '&userProfile=@ViewBag.UserProfile';
+
+            // Abre la URL en una nueva pestaña
+            window.open(url, '_blank');
         }
+
 
 
 

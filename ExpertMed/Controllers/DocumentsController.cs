@@ -1941,6 +1941,46 @@ namespace ExpertMed.Controllers
 
             formFields.SetField("txt_diagnosticos", $"Definitivo: {diagnosisDefName} | Presuntivo: {diagnosisPresumptiveName}");
 
+            // Obtener la posición del campo imagen
+            var fieldPositions = formFields.GetFieldPositions("txt_foto_perfil");
+            if (fieldPositions != null && fieldPositions.Count > 0 && consultation.UsersProfilephoto != null)
+            {
+                var rect = fieldPositions[0].position;
+                var page = fieldPositions[0].page;
+
+                // Convertir byte[] a iTextSharp.text.Image
+                iTextSharp.text.Image profileImg = iTextSharp.text.Image.GetInstance(consultation.UsersProfilephoto);
+                profileImg.ScaleToFit(rect.Width, rect.Height);
+                profileImg.SetAbsolutePosition(rect.Left, rect.Bottom);
+
+                // Añadir la imagen al PDF
+                var content = pdfStamper.GetOverContent(page);
+                content.AddImage(profileImg);
+            }
+
+            fieldPositions = formFields.GetFieldPositions("txt_foto_perfil2");
+            if (fieldPositions != null && fieldPositions.Count > 0 && consultation.UsersProfilephoto != null)
+            {
+                var rect = fieldPositions[0].position;
+                var page = fieldPositions[0].page;
+
+                // Convertir byte[] a iTextSharp.text.Image
+                iTextSharp.text.Image profileImg = iTextSharp.text.Image.GetInstance(consultation.UsersProfilephoto);
+                profileImg.ScaleToFit(rect.Width, rect.Height);
+                profileImg.SetAbsolutePosition(rect.Left, rect.Bottom);
+
+                // Añadir la imagen al PDF
+                var content = pdfStamper.GetOverContent(page);
+                content.AddImage(profileImg);
+            }
+
+
+            // Obtener el secuencial de la receta (primer medicamento de la consulta)
+            var sequential = consultation.MedicationsConsultations.FirstOrDefault()?.MedicationsSequential ?? 0;
+
+            // Colocar el valor en el campo del PDF
+            formFields.SetField("txt_secuencial", sequential.ToString());
+
             // Medicamentos
             var allMedications = await _selectService.GetAllMedicationsAsync();
             var medicationsInfo = string.Join("\n", consultation.MedicationsConsultations.Select(mc =>
@@ -1981,6 +2021,8 @@ namespace ExpertMed.Controllers
 
 
             formFields.SetField("txt_rec_no_farma", consultation.ConsultationNonpharmacologycal ?? "N/A");
+
+            formFields.SetField("txt_direccion", consultation.EstablishmentAddress);
 
             formFields.SetField("txt_direccion", consultation.UsersEstablishmentAddress);
 

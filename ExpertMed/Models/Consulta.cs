@@ -75,6 +75,9 @@ namespace ExpertMed.Models
         public string? SpecialityName { get; set; }
 
         public string? EstablishmentName { get; set; }
+        public string? EstablishmentAddress { get; set; }
+
+
 
 
         // Relaciones con otras tablas

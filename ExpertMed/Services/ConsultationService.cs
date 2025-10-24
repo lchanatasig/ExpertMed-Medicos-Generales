@@ -386,6 +386,8 @@ namespace ExpertMed.Services
                             // La especialidad se encuentra en el índice 34
                             consulta.SpecialityName = reader.IsDBNull(34) ? null : reader.GetString(34);
                             consulta.EstablishmentName = reader.IsDBNull(35) ? null : reader.GetString(35);
+                            consulta.EstablishmentAddress = reader.IsDBNull(36) ? null : reader.GetString(36);
+                           
 
                         }
 
